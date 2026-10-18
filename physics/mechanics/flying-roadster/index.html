@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飛天車力學動畫</title>
+<link rel="stylesheet" href="../../../shared/base.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="kicker">高中物理．力學應用</div>
+  <h1>Roadster「飛天車」：一趟展示裡的力學</h1>
+  <p class="sub">冷氣體推進器 × 吸地風扇 × 主動式姿態控制。動畫會在每個關鍵點停下來說明。</p>
+</header>
+
+<main class="layout">
+  <section>
+    <div class="canvas-wrap" id="wrap">
+      <canvas id="cv3"></canvas>
+      <canvas id="cv"></canvas>
+      <div class="hud">
+        <div class="hud-cell"><span>速度</span><b id="hSpd">0</b><i>km/h</i></div>
+        <div class="hud-cell"><span>離地高度</span><b id="hAlt">0.0</b><i>m</i></div>
+        <div class="hud-cell"><span>G 值</span><b id="hG">1.0</b><i>G</i></div>
+        <div class="hud-cell"><span>氣瓶剩餘</span><b id="hGas">180</b><i>kg</i><div class="bar"><div id="hGasBar"></div></div></div>
+      </div>
+      <div class="sys">
+        <div class="lamp" data-k="fan"><em></em>吸地風扇</div>
+        <div class="lamp" data-k="main"><em></em>主推進器（後）</div>
+        <div class="lamp" data-k="down"><em></em>向下噴嘴</div>
+        <div class="lamp" data-k="att"><em></em>姿態推進器</div>
+      </div>
+      <div class="caption" id="caption"></div>
+      <div class="slowmo" id="slowmo"></div>
+    </div>
+    <div class="timeline" id="timeline"><div class="track"><div class="fill" id="fill"></div></div><div class="marks" id="marks"></div></div>
+    <div class="controls">
+      <button id="bPrev">‹ 上一個</button>
+      <button id="bPlay" class="primary">▶ 開始</button>
+      <button id="bNext">下一個 ›</button>
+      <button id="bReplay">↺ 從頭播放</button>
+      <label>速度 <select id="sel"><option value="0.5">0.5×</option><option value="1" selected>1×（含自動慢動作）</option><option value="2">2×</option></select></label>
+      <label><input type="checkbox" id="cForce" checked> 受力箭頭</label>
+      <label><input type="checkbox" id="cAuto" checked> 關鍵點自動停</label>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--mg)"></i>重力 mg</span>
+      <span><i style="background:var(--N)"></i>正向力 N</span>
+      <span><i style="background:var(--S)"></i>吸力 S</span>
+      <span><i style="background:var(--f)"></i>摩擦力 f</span>
+      <span><i style="background:var(--T)"></i>推力 T</span>
+      <span><i style="background:#e0a400"></i>力偶（力矩）</span>
+      <span>箭頭長度 ∝ 力的大小（以車重 mg 為單位）</span>
+    </div>
+  </section>
+  <aside class="card" id="card"></aside>
+</main>
+
+<footer>
+  <p><b>資料與假設：</b>展示數據（0→60 mph 約 0.81 秒、10 個噴嘴、兩個碳纖維氣瓶合計 600 公升、約 6.5 m 高度啟動煞降、讀數 3.3 G）取自課程講義。
+  以下為教學用假設，官方未公布：車重 2000 kg、輪胎摩擦係數 μ = 1.2、吸力 S = 車重、坡道圓弧半徑 11.5 m、進彎速度 18 m/s、
+  冷氣體噴速 700 m/s、氣瓶約 300 bar（裝約 180 kg 空氣）、噴嘴位置與車列排法。動畫為示意，數字經過一致性計算，但不是實測值。車子外型為原創示意設計，並非實車造型。</p>
+</footer>
+
+<!-- 載入順序有依賴關係，請勿調換 -->
+<script src="../../../shared/vendor/three.min.js"></script>
+<script src="sim.js"></script>
+<script src="cards.js"></script>
+<script src="draw2d.js"></script>
+<script src="scene3d.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

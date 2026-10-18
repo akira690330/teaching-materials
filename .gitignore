@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# 編輯器
+.vscode/
+.idea/
+
+# 安全網：任何帳號、密鑰、私人筆記都不該進 repo
+*帳號*
+*密碼*
+*.secret.*
+.env
+.env.*
+
+# 工具
+node_modules/
