@@ -3,7 +3,7 @@
  * 依賴：以上全部（必須最後載入）
  */
 /* ================= 介面 ================= */
-let simT=0, playing=false, speed=1, autoStop=true, last=null, curStop=-1, ended=false, resumeAt=0, gDisp=1;
+let simT=0, playing=false, speed=1, autoStop=false, last=null, curStop=-1, ended=false, resumeAt=0, gDisp=1;
 const lamps=[...document.querySelectorAll('.lamp')];
 function updateHUD(s){
   $('hSpd').textContent=Math.round(Math.hypot(s.vx,s.vy)*3.6);
@@ -44,7 +44,7 @@ function showIntro(){
   <p><span class="k" style="background:var(--S)"></span><b>地面效應吸地風扇</b>：把車吸在地面或牆面上，加大正向力和摩擦力。</p>
   <p><span class="k" style="background:var(--T)"></span><b>冷氣體推進器</b>：噴出高壓空氣，用反作用力直接推車。</p>
   <p><span class="k" style="background:#e0a400"></span><b>主動式姿態控制</b>：小噴嘴產生力矩，在空中翻正、微調車身。</p>
-  <p>動畫分成三段：<b>彈射起步 → 彎曲坡道與空中翻轉 → 跳越車列</b>。前兩段是 3D 夜間測試場、一鏡到底的連續動作，關鍵時刻會自動放慢，車子騰空時會進入子彈時間、鏡頭繞到車子前方；每到關鍵點會停下，右側說明當下的力學原理。畫面上的箭頭是即時受力圖。</p>
+  <p>動畫分成三段：<b>彈射起步 → 彎曲坡道與空中翻轉 → 跳越車列</b>。全程為 3D 夜間測試場展示，關鍵時刻會自動放慢，車子騰空時會有子彈時間與拉近／拉遠的動態運鏡；勾選下方「關鍵點自動停」時，每到關鍵點會停下並在右側說明當下的力學原理。畫面上的箭頭是即時受力圖。</p>
   <p class="note">鍵盤：空白鍵＝播放／暫停，← → ＝上一個／下一個關鍵點。數字中有一部分是教學假設（見頁尾）。</p></div>
   <div class="c-foot"><span></span><button class="primary" id="cGo">開始播放 ▶</button></div>`;
   $('cGo').onclick=play; marks();

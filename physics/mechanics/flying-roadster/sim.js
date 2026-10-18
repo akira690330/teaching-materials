@@ -150,30 +150,39 @@ seg(0.7,(tau,u)=>st({x:xEnd2,phi:Math.PI,rho:Math.PI,fan:1,load:2,camT:camF(xEnd
 seg(0.6,()=>st({scene:'B',x:-36,fan:1,load:2,camT:camB(-36),fade:1,title:'第三段：跳越車列',forces:[]}));
 
 // ---- 第三段：跳越車列 ----
+const camBNear=(x,y)=>[x+1.2,Math.max(CY(14.5),y+0.15),14.5];
+const camBLand=(x,y,w=15)=>[x+1.2,Math.max(CY(w),y+0.1),w];
 seg(3.0,(tau)=>{const x=-36+vx3*tau;const fan=tau<2.58?1:Math.max(0,1-(tau-2.58)/0.3);
-  return st({scene:'B',x,vx:vx3,fan,load:1+fan,camT:camB(x),fade:tau<0.7?1-tau/0.7:0,title:'第三段：跳越車列',
-  forces:forces({x,y:hc},{N:1+fan,S:fan}),cap:tau<2.4?'以 12 m/s（約 43 km/h）接近車列':'起跳前先關閉吸地風扇'});});
+  const kz=smooth((tau-1.25)/0.9);
+  return st({scene:'B',x,vx:vx3,fan,load:1+fan,camT:blendCam(camB(x),camBNear(x,hc),kz),fade:tau<0.7?1-tau/0.7:0,title:'第三段：跳越車列',
+  forces:forces({x,y:hc},{N:1+fan,S:fan}),cap:tau<2.2?'以 12 m/s（約 43 km/h）接近車列':'鏡頭拉近：起跳前先關閉吸地風扇'});});
 stop('s12',0.03);
 seg(t1,(tau)=>{const x=vx3*tau, y=hc+0.5*g*tau*tau;
-  return st({scene:'B',x,y,vx:vx3,vy:g*tau,G:2,down:2,mdot:mdot1,contact:false,gap:hc+0.06,camT:camB(x),slowT:0.6,
+  return st({scene:'B',x,y,vx:vx3,vy:g*tau,G:2,down:2,mdot:mdot1,contact:false,gap:hc+0.06,camT:camBNear(x,y),slowT:0.55,
   forces:forces({x,y},{Td:2}),cap:'向下噴嘴推力 2mg：向上加速起跳'});});
 stop('s13',vy1/g);
 seg(tc,(tau)=>{const x=vx3*(t1+tau), y=hc+h1+vy1*tau-0.5*g*tau*tau;
-  return st({scene:'B',x,y,vx:vx3,vy:vy1-g*tau,G:0,contact:false,gap:hc+0.06,camT:camB(x),slowT:0.6,forces:forces({x,y},{}),
-  cap:tau<vy1/g?'推進器關閉：靠慣性繼續上升（鉛直上拋）':'越過車列，開始下墜'});});
+  const tApex=vy1/g;
+  // 最高點下墜前拉遠（看越過車列全景）→ 落地噴射出來前（tau 接近 tc）再次拉近
+  const kOut=smooth((tau-(tApex-0.32))/0.42), kIn=smooth((tau-(tc-0.52))/0.42);
+  const cMid=blendCam(camBNear(x,y),[18.5,CY(38),38],kOut);
+  const camT=blendCam(cMid,camBLand(x,y,15),kIn);
+  const cap=tau<tApex?'推進器關閉：靠慣性繼續上升（鉛直上拋）':(tau<tc-0.4?'最高點拉遠：越過車列，開始下墜':'準備煞降：噴射前鏡頭拉近');
+  return st({scene:'B',x,y,vx:vx3,vy:vy1-g*tau,G:0,contact:false,gap:hc+0.06,camT,slowT:0.55,forces:forces({x,y},{}),cap});});
 seg(tB2,(tau)=>{const x=vx3*(t1+tc+tau), y=hc+2+vy2*tau+0.5*a2*tau*tau;
-  return st({scene:'B',x,y,vx:vx3,vy:vy2+a2*tau,G:(g+a2)/g,down:(g+a2)/g,mdot:mdot2,contact:false,gap:hc+0.06,camT:camB(x),slowT:0.6,
-  forces:forces({x,y},{Td:(g+a2)/g}),cap:'最後 2 m：再次噴氣煞降'});});
+  return st({scene:'B',x,y,vx:vx3,vy:vy2+a2*tau,G:(g+a2)/g,down:(g+a2)/g,mdot:mdot2,contact:false,gap:hc+0.06,camT:camBLand(x,y,15),slowT:0.5,
+  forces:forces({x,y},{Td:(g+a2)/g}),cap:'最後 2 m：向下噴嘴噴射煞降'});});
 const xT3=vx3*(t1+tc+tB2);
 stop('s14',0.15);
 seg(Tsus,(tau)=>{const q=Math.PI*tau/(2*Tsus);const x=xT3+vx3*tau, y=hc-dip*Math.sin(q);const a=vLand*(Math.PI/(2*Tsus))*Math.sin(q);
-  return st({scene:'B',x,y,vx:vx3,vy:-vLand*Math.cos(q),G:1+a/g,load:1+a/g,gap:y,dust:tau<0.08?2:0,shk:tau<DT*1.5?0.08:0,camT:camB(x),slowT:0.6,
+  return st({scene:'B',x,y,vx:vx3,vy:-vLand*Math.cos(q),G:1+a/g,load:1+a/g,gap:y,dust:tau<0.08?2:0,shk:tau<DT*1.5?0.08:0,camT:camBLand(x,hc,15.5),slowT:0.55,
   forces:forces({x,y},{N:1+a/g}),cap:'落地！'});});
 const xT4=xT3+vx3*Tsus;
-seg(2.4,(tau)=>{const x=xT4+vx3*tau-2.5*tau*tau, y=hc-dip*(1-smooth(tau/0.4));const fan=smooth(tau/0.4);
-  return st({scene:'B',x,y,vx:vx3-5*tau,fan,load:1+fan,gap:y,G:Math.hypot(5,g)/g,camT:camB(x),forces:forces({x,y},{N:1+fan,S:fan,f:-5/g}),cap:'吸地風扇＋煞車：停車'});});
+seg(2.4,(tau)=>{const x=xT4+vx3*tau-2.5*tau*tau, y=hc-dip*(1-smooth(tau/0.4));const fan=smooth(tau/0.4), vx=vx3-5*tau;
+  const w=lerp(15.5,20,smooth(tau/1.6));
+  return st({scene:'B',x,y,vx,fan,load:1+fan,gap:y,G:Math.hypot(5,g)/g,camT:[x+1.2*(1-smooth(tau/2.2)),CY(w),w],forces:forces({x,y},{N:1+fan,S:fan,f:-5/g}),cap:'吸地風扇＋煞車：鏡頭跟隨直到停車'});});
 const xFin=xT4+vx3*2.4-2.5*2.4*2.4;
-seg(1.2,()=>st({scene:'B',x:xFin,fan:1,load:2,camT:camB(99),forces:forces({x:xFin,y:hc},{N:2,S:1}),cap:'展示結束'}));
+seg(1.2,()=>st({scene:'B',x:xFin,fan:1,load:2,camT:[xFin,CY(20),20],forces:forces({x:xFin,y:hc},{N:2,S:1}),cap:'展示結束'}));
 const gasEnd=gas, Tend=T-DT;
 stops.forEach((s,i)=>s.i=i);
 
@@ -198,11 +207,12 @@ stops.forEach((s,i)=>s.i=i);
     s.tilt=tilt; s.sink=sink;
   }
   // 2) 鏡頭：雙向平滑（不會落後、也不會跳）＋震動包絡
-  const sm=(get,set,tau)=>{let start=0;
+  const sm=(get,set,tauA,tauB=tauA)=>{let start=0;
     for(let i=1;i<=n;i++){ if(i===n||F[i].scene!==F[i-1].scene||(F[i].fade===1&&F[i-1].fade<1)){
+      const tau=F[start].scene==='B'?tauB:tauA;
       let v=get(F[start]);for(let j=start;j<i;j++){v+=(get(F[j])-v)*aF(tau);F[j]._f=v;}
       v=F[i-1]._f;for(let j=i-1;j>=start;j--){v+=(F[j]._f-v)*aF(tau);set(F[j],v);} start=i;}}};
-  sm(s=>s.camT[0],(s,v)=>s.cx=v,0.32); sm(s=>s.camT[1],(s,v)=>s.cy=v,0.32); sm(s=>s.camT[2],(s,v)=>s.cw=v,0.4);
+  sm(s=>s.camT[0],(s,v)=>s.cx=v,0.32,0.16); sm(s=>s.camT[1],(s,v)=>s.cy=v,0.32,0.16); sm(s=>s.camT[2],(s,v)=>s.cw=v,0.4,0.16);
   sm(s=>s.slowT,(s,v)=>s.slow=v,0.1);
   {let aj=[0,0,0,0,0,0];for(let i=0;i<n;i++){const s=F[i];for(let k=0;k<6;k++)aj[k]+=(s.aj[k]-aj[k])*aF(0.035);s.ajV=aj.slice();s.orb=s.orbT;s.yaw=s.yawT;s.pit=s.pitT;s.dO=s.dT;}}
   let env=0;for(let i=0;i<n;i++){env=Math.max(env*Math.exp(-DT/0.22),F[i].shk);F[i].shake=env;}

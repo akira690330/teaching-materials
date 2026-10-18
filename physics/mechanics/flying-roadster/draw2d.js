@@ -215,8 +215,10 @@ function emit(s,dt){
   if(s.dust>0){[-1.36,1.38].forEach((o,i)=>{const p=pw(s,o,-0.5);add('u'+i,p[0],0.1,-fw[0]*0.6,0.5,90*s.dust,{dust:true,sp:4,spread:1.4,life:1.1,sz:1.3,inh:0.15});});}
   if(s.downV>0.5&&s.y<6){const k=(6-s.y)/6;add('gd',s.x,0.1,0,1,60*k*s.downV,{dust:true,sp:6,spread:3,life:0.9,sz:1.5,inh:0.1});}
 }
+let lastScene='A';
 function stepParticles(dt,s){
-  if(dt<=0)return; (s.scene==='A'&&R3)?emit3D(s,dt):emit(s,dt);
+  if(s.scene!==lastScene){parts=[];acc={};lastScene=s.scene;}
+  if(dt<=0)return; R3?emit3D(s,dt):emit(s,dt);
   for(const p of parts){p.life+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;const d=Math.max(0,1-(p.dust?2:4)*dt);p.vx*=d;p.vy*=d;
     if(p.dust)p.vy+=0.6*dt;
     if(p.vz!==undefined){p.z+=p.vz*dt;p.vz*=d;}
@@ -282,7 +284,7 @@ function drawFade(s){if(s.fade>0){ctx.fillStyle=`rgba(4,6,10,${s.fade})`;ctx.fil
     if(s.title){ctx.fillStyle=`rgba(255,255,255,${s.fade})`;ctx.textAlign='center';ctx.font=`700 ${Math.round(W/28)}px -apple-system,"PingFang TC",sans-serif`;ctx.fillText(s.title,W/2,H/2);}}}
 function draw(){
   const s=at(simT), now=performance.now()/1000;
-  if(s.scene==='A'&&R3){cv3.style.visibility='visible';render3D(s);ctx.clearRect(0,0,W,H);if(showForces)drawForces3D(s);drawFade(s);updateHUD(s);return;}
+  if(R3){cv3.style.visibility='visible';render3D(s);ctx.clearRect(0,0,W,H);drawVehLabels3D(s);if(showForces)drawForces3D(s);drawFade(s);updateHUD(s);return;}
   if(R3)cv3.style.visibility='hidden';
   const sh=s.shake||0;
   cam={cx:s.cx+sh*Math.sin(s.t*97),cy:s.cy+sh*Math.cos(s.t*83),w:s.cw}; sc=W/cam.w;

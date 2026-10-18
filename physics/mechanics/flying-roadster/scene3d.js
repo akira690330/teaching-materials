@@ -154,8 +154,8 @@ function init3D(){
   const moon=new THREE.DirectionalLight(0xb0c0e8,0.4);moon.castShadow=true;moon.shadow.mapSize.set(2048,2048);
   Object.assign(moon.shadow.camera,{left:-16,right:16,top:16,bottom:-16,near:1,far:90});moon.shadow.bias=-0.0006;scene.add(moon,moon.target);
   const metal=new THREE.MeshStandardMaterial({color:0x3b4048,metalness:0.75,roughness:0.42});
-  const beam=(a,b,t)=>{const d=new THREE.Vector3().subVectors(b,a);const L=d.length();const mm=new THREE.Mesh(new THREE.BoxGeometry(t,L,t),metal);
-    mm.position.copy(a).addScaledVector(d,0.5);mm.quaternion.setFromUnitVectors(V3(0,1,0),d.clone().normalize());mm.castShadow=true;scene.add(mm);return mm;};
+  const beam=(a,b,t,parent=scene)=>{const d=new THREE.Vector3().subVectors(b,a);const L=d.length();const mm=new THREE.Mesh(new THREE.BoxGeometry(t,L,t),metal);
+    mm.position.copy(a).addScaledVector(d,0.5);mm.quaternion.setFromUnitVectors(V3(0,1,0),d.clone().normalize());mm.castShadow=true;parent.add(mm);return mm;};
   // 地面與跑道
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),new THREE.MeshStandardMaterial({color:0x0a0b0d,roughness:1}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
@@ -175,20 +175,61 @@ function init3D(){
    const lp=[];for(let i=0;i<160;i++){const th=Math.random()*Math.PI*2;lp.push(40+280*Math.cos(th),0.5+Math.random()*2,280*Math.sin(th));}
    const lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(lp,3));
    scene.add(new THREE.Points(lg,new THREE.PointsMaterial({color:0xffc985,size:2.2,sizeAttenuation:false,fog:false})));}
-  // 彎曲坡道
+  // 第一、二段專用：彎曲坡道
+  const grpA=new THREE.Group();scene.add(grpA);
   {const band=[];for(let d=0;d<=150;d+=1.5){const t=d*Math.PI/180;band.push(new THREE.Vector2(xL+r*Math.sin(t),r-r*Math.cos(t)));}
    for(let d=150;d>=0;d-=1.5){const t=d*Math.PI/180;band.push(new THREE.Vector2(xL+(r+0.55)*Math.sin(t),r-(r+0.55)*Math.cos(t)));}
    const rg=new THREE.ExtrudeGeometry(new THREE.Shape(band),{depth:6,bevelEnabled:false,curveSegments:1});rg.translate(0,0,-3);
-   const ramp=new THREE.Mesh(rg,new THREE.MeshStandardMaterial({color:0x7a8088,roughness:0.75,metalness:0.05}));ramp.receiveShadow=true;scene.add(ramp);
+   const ramp=new THREE.Mesh(rg,new THREE.MeshStandardMaterial({color:0x7a8088,roughness:0.75,metalness:0.05}));ramp.receiveShadow=true;grpA.add(ramp);
    const arc=(R,z)=>new THREE.CatmullRomCurve3(Array.from({length:121},(_,i)=>{const t=i/120*thE;return V3(xL+R*Math.sin(t),r-R*Math.cos(t),z);}));
-   [-1.1,1.1].forEach(z=>scene.add(new THREE.Mesh(new THREE.TubeGeometry(arc(r-0.02,z),240,0.035,6),new THREE.MeshStandardMaterial({color:0xdedede,emissive:0x2a2a2a}))));
-   [-2.97,2.97].forEach(z=>{scene.add(new THREE.Mesh(new THREE.TubeGeometry(arc(r-0.03,z),240,0.05,6),new THREE.MeshBasicMaterial({color:0xff2626})));
-     scene.add(new THREE.Mesh(new THREE.TubeGeometry(arc(r-0.03,z),240,0.22,8),new THREE.MeshBasicMaterial({color:0xff2020,transparent:true,opacity:0.16,blending:THREE.AdditiveBlending,depthWrite:false})));});
-   const rl1=new THREE.PointLight(0xff3030,0.8,14,2);rl1.position.set(xL+r*Math.sin(2.2),r-r*Math.cos(2.2),3.3);scene.add(rl1);
+   [-1.1,1.1].forEach(z=>grpA.add(new THREE.Mesh(new THREE.TubeGeometry(arc(r-0.02,z),240,0.035,6),new THREE.MeshStandardMaterial({color:0xdedede,emissive:0x2a2a2a}))));
+   [-2.97,2.97].forEach(z=>{grpA.add(new THREE.Mesh(new THREE.TubeGeometry(arc(r-0.03,z),240,0.05,6),new THREE.MeshBasicMaterial({color:0xff2626})));
+     grpA.add(new THREE.Mesh(new THREE.TubeGeometry(arc(r-0.03,z),240,0.22,8),new THREE.MeshBasicMaterial({color:0xff2020,transparent:true,opacity:0.16,blending:THREE.AdditiveBlending,depthWrite:false})));});
+   const rl1=new THREE.PointLight(0xff3030,0.8,14,2);rl1.position.set(xL+r*Math.sin(2.2),r-r*Math.cos(2.2),3.3);grpA.add(rl1);
    let prev=null;
    for(let d=12;d<=150;d+=9.2){const t=d*Math.PI/180,R=r+0.75;const px=xL+R*Math.sin(t),py=r-R*Math.cos(t);
-     for(const z of [-3.3,3.3]){if(z>0&&d>92)continue;beam(V3(px,0,z),V3(px,py,z),0.22);if(prev&&!(z>0&&d>92))beam(V3(prev[0],prev[1],z),V3(px,0.05,z),0.1);}
-     beam(V3(px,py,-3.3),V3(px,py,3.3),0.14);prev=[px,py];}}
+     for(const z of [-3.3,3.3]){if(z>0&&d>92)continue;beam(V3(px,0,z),V3(px,py,z),0.22,grpA);if(prev&&!(z>0&&d>92))beam(V3(prev[0],prev[1],z),V3(px,0.05,z),0.1,grpA);}
+     beam(V3(px,py,-3.3),V3(px,py,3.3),0.14,grpA);prev=[px,py];}}
+  // 第三段專用：5 台停放車列（3D 模型）
+  const grpB=new THREE.Group();grpB.visible=false;scene.add(grpB);
+  {const wMat=new THREE.MeshStandardMaterial({color:0x141619,roughness:0.9}), rMat=new THREE.MeshStandardMaterial({color:0x9aa0a8,metalness:0.8,roughness:0.3}),
+         gMat=new THREE.MeshPhysicalMaterial({color:0x0c131c,metalness:0.3,roughness:0.08,clearcoat:1,envMapIntensity:1.5}),
+         hlMat=new THREE.MeshBasicMaterial({color:0xfff6e0}), rlMat=new THREE.MeshBasicMaterial({color:0xff2a20});
+   VEH.forEach(v=>{
+     const vg=new THREE.Group();vg.position.set(v.x,0,0);grpB.add(vg);
+     const w=v.w, h=v.h, L=v.t==='semi'?5.6:(v.t==='truck'?4.9:4.3);
+     const mat=new THREE.MeshPhysicalMaterial({color:v.c,metalness:v.t==='truck'?0.85:0.45,roughness:v.t==='truck'?0.26:0.32,clearcoat:v.t==='truck'?0.2:0.9,envMapIntensity:0.9});
+     const rw=v.t==='semi'?0.48:(v.t==='truck'?0.42:0.34), wg=new THREE.CylinderGeometry(rw,rw,0.26,24);wg.rotateZ(Math.PI/2);
+     const rg2=new THREE.CylinderGeometry(rw*0.62,rw*0.62,0.27,18);rg2.rotateZ(Math.PI/2);
+     const zs=v.t==='semi'?[L*0.32,-L*0.18,-L*0.36]:[L*0.31,-L*0.31];
+     for(const sx2 of [-w/2+0.12,w/2-0.12])for(const sz of zs){
+       const wm=new THREE.Mesh(wg,wMat);wm.position.set(sx2,rw,sz);wm.castShadow=true;vg.add(wm);
+       const rm=new THREE.Mesh(rg2,rMat);rm.position.set(sx2,rw,sz);vg.add(rm);
+     }
+     let pts;
+     if(v.t==='semi'){
+       pts=[[-L/2,0.38],[L/2,0.38],[L/2,1.25],[L*0.38,2.55],[L*0.1,3.95],[-L*0.28,4.0],[-L/2,3.95]];
+     }else if(v.t==='truck'){
+       pts=[[-L/2,0.4],[L/2,0.4],[L/2,0.98],[L*0.06,h],[-L/2,1.26]];
+     }else{
+       pts=[[-L/2,0.3],[L/2,0.3],[L/2,h*0.52],[L*0.24,h*0.58],[L*0.08,h],[-L*0.26,h],[-L*0.42,h*0.64],[-L/2,h*0.56]];
+     }
+     const sh=v.t==='truck'?(()=>{const s=new THREE.Shape();pts.forEach((p,i)=>i?s.lineTo(p[0],p[1]):s.moveTo(p[0],p[1]));s.closePath();return s;})():shapeFrom(pts);
+     const eg=new THREE.ExtrudeGeometry(sh,{depth:w-0.14,bevelEnabled:true,bevelThickness:0.06,bevelSize:0.05,bevelSegments:v.t==='truck'?1:4});
+     eg.translate(0,0,-(w-0.14)/2);eg.rotateY(Math.PI/2);
+     const bm=new THREE.Mesh(eg,mat);bm.castShadow=true;bm.receiveShadow=true;vg.add(bm);
+     // 前擋風玻璃與車燈（朝向鏡頭 +Z）
+     const wy=v.t==='semi'?2.05:(v.t==='truck'?1.38:h*0.76), wh=v.t==='semi'?0.95:(v.t==='truck'?0.52:h*0.32), wz=v.t==='semi'?L*0.41:(v.t==='truck'?L*0.28:L*0.18);
+     const wm=new THREE.Mesh(new THREE.BoxGeometry(w*0.82,wh,0.12),gMat);wm.position.set(0,wy,wz);wm.rotation.x=v.t==='semi'?-0.38:(v.t==='truck'?-0.85:-0.62);vg.add(wm);
+     const sw=new THREE.Mesh(new THREE.BoxGeometry(w+0.03,wh*0.78,L*0.42),gMat);sw.position.set(0,wy,-L*0.04);vg.add(sw);
+     if(v.t==='truck'){
+       const lb=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,0.06,0.08),hlMat);lb.position.set(0,0.95,L/2+0.02);vg.add(lb);
+     }else{
+       for(const sx2 of [-w*0.33,w*0.33]){const hl=new THREE.Mesh(new THREE.BoxGeometry(w*0.2,0.09,0.08),hlMat);hl.position.set(sx2,0.68,L/2+0.02);vg.add(hl);}
+     }
+     for(const sx2 of [-w*0.34,w*0.34]){const rl=new THREE.Mesh(new THREE.BoxGeometry(w*0.18,0.07,0.06),rlMat);rl.position.set(sx2,0.52,L/2+0.02);vg.add(rl);}
+   });
+   const lB=new THREE.PointLight(0xfff2dd,0.7,28,1.8);lB.position.set(16.7,9,9);grpB.add(lB);}
   // 照明燈塔
   const glowTex=radialTex('rgba(255,246,228,1)','rgba(255,220,170,0)');
   [[xL-30,17,17,xL-10,4],[xL+20,19,15,xL+4,10],[-10,13,15,4,0],[xL-8,15,-20,xL,10]].forEach(([x,y,z,tx,ty])=>{
@@ -202,7 +243,7 @@ function init3D(){
   const car=makeCar();scene.add(car.root);
   const ljDown=new THREE.PointLight(0x8fd0ff,0,14,2), ljMain=new THREE.PointLight(0x8fd0ff,0,12,2);scene.add(ljDown,ljMain);
   const gasP=makePoints(true,0x9fd6ff), dustP=makePoints(false,0x8c7d68);scene.add(gasP,dustP);
-  return {renderer,scene,camera,car,moon,ljDown,ljMain,gasP,dustP};
+  return {renderer,scene,camera,car,moon,ljDown,ljMain,gasP,dustP,grpA,grpB};
 }
 const _q1=new THREE.Quaternion(),_q2=new THREE.Quaternion(),_v=new THREE.Vector3(),_d=new THREE.Vector3();
 const AXZ=V3(0,0,1), AXX=V3(1,0,0);
@@ -227,7 +268,8 @@ function fillPoints(P,dust){const pos=P.geometry.attributes.position.array,al=P.
     pos[n*3]=p.x;pos[n*3+1]=p.y;pos[n*3+2]=p.z||0;al[n]=dust?0.42*(1-u):0.55*(1-u);sz[n]=(0.3+1.4*u)*p.sz;n++;}
   P.geometry.setDrawRange(0,n);P.geometry.attributes.position.needsUpdate=true;P.geometry.attributes.alpha.needsUpdate=true;P.geometry.attributes.psize.needsUpdate=true;}
 function render3D(s){
-  const {renderer,scene,camera,car,moon,ljDown,ljMain}=R3;
+  const {renderer,scene,camera,car,moon,ljDown,ljMain,grpA,grpB}=R3;
+  grpA.visible=s.scene==='A'; grpB.visible=s.scene==='B';
   carQuat(s,car.root.quaternion);car.root.position.set(s.x,s.y,0);
   car.body.position.y=s.sink;car.body.rotation.z=s.tilt;
   car.wheels.forEach(w=>{w.g.position.y=-s.gap+RW;w.g.rotation.z=-s.wa;w.cal.position.y=-s.gap+RW+0.07;});
@@ -250,6 +292,17 @@ function render3D(s){
   renderer.render(scene,camera);
 }
 function P3(x,y,z=0){_v.set(x,y,z).project(R3.camera);return[(_v.x+1)/2*W,(1-_v.y)/2*H,_v.z];}
+function drawVehLabels3D(s){
+  if(s.scene!=='B')return;
+  const U=Math.max(0.65,Math.min(1.3,W/900));
+  ctx.font=`600 ${Math.round(11*U)}px -apple-system,"PingFang TC",sans-serif`;
+  ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='rgba(6,8,12,.85)';ctx.fillStyle='rgba(235,240,248,.9)';
+  VEH.forEach((v,vi)=>{
+    const p=P3(v.x,0,2.5);if(p[2]>1||p[0]<-60||p[0]>W+60)return;
+    const py=p[1]+(vi%2?22:10)*U;
+    ctx.strokeText(v.n,p[0],py);ctx.fillText(v.n,p[0],py);
+  });
+}
 function drawForces3D(s){
   const U=Math.max(0.65,Math.min(1.3,W/900)), lw=3*U, Lw=1.15;
   ctx.font=`600 ${Math.round(12*U)}px -apple-system,"PingFang TC",sans-serif`;
