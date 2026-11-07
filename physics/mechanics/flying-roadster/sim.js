@@ -8,7 +8,21 @@ const v60=26.82, tL=0.81, aL=v60/tL, aTire=mu*(1+S1)*g, aT=aL-aTire, TL=m*aT, md
 const vIn=18, aBr=8, tBr=(v60-vIn)/aBr, tCr=0.8;
 const r=11.5, thE=150*Math.PI/180, vE=9;
 const aD=(vE*vE-vIn*vIn+2*g*r*(1-Math.cos(thE)))/(2*r*thE);
-const vTh=th=>Math.sqrt(Math.max(0.01,vIn*vIn+2*aD*r*th-2*g*r*(1-Math.cos(th))));
+// 坡道動態摩擦力 f(θ) 與吸力 S(θ)（結合 roadster_ramp_model_spec：f 隨 sinθ 在 90° 達最大，S 依接觸與抓地需求在約 135°~144° 達峰值，144.5°~150° 線性釋放至 N→0 脫離）
+const thRel=144.5*Math.PI/180, f0R=0.09;
+const relR=th=>th<thRel?1:Math.max(0,(thE-th)/(thE-thRel));
+const kSinR=((aD/g)*thE-f0R*(thRel+0.5*(thE-thRel)))/((1-Math.cos(thRel))+0.5*Math.sin(thRel)*(thE-thRel));
+const fRamp=th=>(f0R+kSinR*Math.sin(th))*relR(th);
+const intFRamp=th=>th<=thRel?f0R*th+kSinR*(1-Math.cos(th)):(f0R*thRel+kSinR*(1-Math.cos(thRel)))+(f0R+kSinR*Math.sin(thRel))*((th-thRel)-0.5*(th-thRel)**2/(thE-thRel));
+const vTh=th=>Math.sqrt(Math.max(0.01,vIn*vIn+2*g*r*intFRamp(th)-2*g*r*(1-Math.cos(th))));
+function sRamp(th,v,mgR=1){
+  const N0=v*v/(g*r)+mgR*Math.cos(th), f=fRamp(th);
+  const Sneed=Math.max(0.35,0.92-N0,1.25*f/mu-N0+0.55);
+  return Math.min(1.15,Sneed)*relR(th);
+}
+const dragR=v=>0.5*1.2*0.6*v*v/mg;
+// 滾動阻力 R = C_rr·N（輪胎變形的能量損失，等效為接觸點上與運動反向的力；車靜止時為 0）
+const Crr=0.012, rollRes=N=>Crr*N;
 const vC=vE*(r-hc)/r, Vx=vC*Math.cos(thE), Vy=vC*Math.sin(thE);
 const dL=0.5*aL*tL*tL, dBr=(v60*v60-vIn*vIn)/(2*aBr);
 const xL=dL+dBr+vIn*tCr;
@@ -28,7 +42,7 @@ const vx3=12, t1=0.7, T1=2*mg, mdot1=T1/ve, vy1=g*t1, h1=0.5*g*t1*t1, apex3=h1+v
 const tc=(vy1+Math.sqrt(vy1*vy1+2*g*(h1-2)))/g, vy2=vy1-g*tc, a2=(vy2*vy2-vLand*vLand)/(2*2), tB2=(-vy2-vLand)/a2, T2=m*(g+a2), mdot2=T2/ve;
 const gasJ1=mdot1*t1, gasJ2=mdot2*tB2;
 const hoverMdot=mg/ve, hoverTime=tank0/hoverMdot;
-const v90=vTh(Math.PI/2), N90=v90*v90/(g*r)+S1, at90=aD-g;
+const v90=vTh(Math.PI/2), N90=v90*v90/(g*r)+sRamp(Math.PI/2,v90), at90=fRamp(Math.PI/2)*g-g;
 const an150=vE*vE/r, N150=an150/g+S1+Math.cos(thE), N150no=an150/g+Math.cos(thE), vcrit=Math.sqrt(-g*r*Math.cos(thE));
 const Gbot=1+vIn*vIn/(g*r), G60=1+v60*v60/(g*r);
 const Fsus=m*vLand/Tsus, Gsus=1+vLand/(Tsus*g);
@@ -46,7 +60,14 @@ const n0=x=>Math.round(x).toLocaleString('en-US'), n1=x=>(Math.round(x*10)/10).t
 const DT=1/240, F=[], stops=[];
 let T=0, gas=tank0;
 function stop(id,off){stops.push({id,t:T+off});}
-function pushS(s){gas-=(s.mdot||0)*DT;s.gas=gas;s.t=T;F.push(s);T+=DT;}
+function pushS(s){
+  gas-=(s.mdot||0)*DT; s.gas=gas; s.t=T;
+  const mgR=(m-(tank0-gas))/m; s.mgR=mgR;
+  const fMap={mg:mgR,N:0,S:0,f:0,T:0,D:0,R:0};
+  for(const q of s.forces){if(q.k==='mg')q.mag=mgR; fMap[q.k]=q.mag;}
+  s.fMap=fMap;
+  F.push(s); T+=DT;
+}
 function seg(dur,fn){const n=Math.max(1,Math.round(dur/DT));for(let i=0;i<n;i++)pushS(fn(i*DT,i/n));}
 function st(o){return Object.assign({scene:'A',x:0,y:hc,phi:0,rho:0,vx:0,vy:0,G:1,fan:0,main:0,down:0,att:0,mdot:0,
   forces:[],cap:'',fade:0,couple:0,title:'',contact:true,load:1,gap:hc,onLoop:false,dust:0,shk:0,slowT:1,camT:null,aj:AJ0,orbT:0,yawT:0,pitT:0,dT:12},o);}
@@ -56,11 +77,14 @@ function forces(p,o){
   const {fw,up}=vecs(p.phi||0,p.rho||0);
   const cx=p.x-up[0]*hc, cy=p.y-up[1]*hc;
   const out=[{k:'mg',mag:1,dir:[0,-1],at:[p.x,p.y],mode:'from'}];
-  if(o.N>0.02) out.push({k:'N',mag:o.N,dir:up,at:[cx+fw[0]*0.9,cy+fw[1]*0.9],mode:'from'});
-  if(o.S>0.02) out.push({k:'S',mag:o.S,dir:[-up[0],-up[1]],at:[cx-fw[0]*0.9+up[0]*0.25,cy-fw[1]*0.9+up[1]*0.25],mode:'from'});
-  if(o.f&&Math.abs(o.f)>0.02) out.push({k:'f',mag:Math.abs(o.f),dir:o.f>0?fw:[-fw[0],-fw[1]],at:[cx,cy],mode:'from'});
-  if(o.T) out.push({k:'T',mag:o.T,dir:fw,at:[p.x-fw[0]*2.3,p.y-fw[1]*2.3],mode:'to'});
-  if(o.Td) out.push({k:'T',mag:o.Td,dir:up,at:[p.x-up[0]*0.45+fw[0]*1.2,p.y-up[1]*0.45+fw[1]*1.2],mode:'to'});
+  if(o.N>0.015) out.push({k:'N',mag:o.N,dir:up,at:[cx+fw[0]*0.9,cy+fw[1]*0.9],mode:'from'});
+  if(o.S>0.015) out.push({k:'S',mag:o.S,dir:[-up[0],-up[1]],at:[cx-fw[0]*0.9+up[0]*0.25,cy-fw[1]*0.9+up[1]*0.25],mode:'from'});
+  if(o.f&&Math.abs(o.f)>0.002) out.push({k:'f',mag:Math.abs(o.f),dir:o.f>0?fw:[-fw[0],-fw[1]],at:[cx,cy],mode:'from'});
+  // 空氣阻力：與運動方向相反，畫在車頭（只在模型有計入阻力的平地段傳入）
+  if(o.R&&o.R>0.002) out.push({k:'R',mag:o.R,dir:[-fw[0],-fw[1]],at:[cx-fw[0]*1.36,cy-fw[1]*1.36],mode:'from'});
+  if(o.D&&o.D>0.002) out.push({k:'D',mag:o.D,dir:[-fw[0],-fw[1]],at:[p.x+fw[0]*2.2,p.y+fw[1]*2.2],mode:'to'});
+  if(o.T&&o.T>0.015) out.push({k:'T',mag:o.T,dir:fw,at:[p.x-fw[0]*2.3,p.y-fw[1]*2.3],mode:'to'});
+  if(o.Td&&o.Td>0.015) out.push({k:'T',mag:o.Td,dir:up,at:[p.x-up[0]*0.45+fw[0]*1.2,p.y-up[1]*0.45+fw[1]*1.2],mode:'to'});
   return out;
 }
 const CY=w=>0.16875*w;
@@ -72,30 +96,40 @@ stop('s1',0.6);
 seg(1.2,()=>st({x:0,camT:camA1(0),forces:forces({x:0,y:hc},{N:1}),cap:'靜止待命：只受重力與正向力'}));
 seg(1.0,(tau,u)=>{const S=smooth(u);return st({x:0,fan:S,load:1+S,camT:camA1(0),forces:forces({x:0,y:hc},{N:1+S,S}),cap:'吸地風扇啟動中……車身被往下壓'});});
 stop('s2',0.02);
+// 車靜止 → 水平合力為零，地面不提供摩擦力
 seg(0.5,()=>st({x:0,fan:1,load:2,camT:camA1(0),forces:forces({x:0,y:hc},{N:2,S:1}),cap:'吸地風扇全開：車被壓向地面'}));
 const tLa0=T;
 stop('s3',0.03); stop('s4',tL-2*DT);
-seg(tL,(tau)=>{const x=0.5*aL*tau*tau;return st({x,vx:aL*tau,fan:1,load:2,main:aT/g,mdot:mdotL,G:Math.hypot(aL,g)/g,camT:camA1(x),
-  dust:tau<0.45?1:0,shk:tau<DT*1.5?0.07:0,slowT:0.4,forces:forces({x,y:hc},{N:2,S:1,f:aTire/g,T:aT/g}),cap:'吸地風扇＋主推進器：全力彈射'});});
+seg(tL,(tau)=>{const x=0.5*aL*tau*tau, vx=aL*tau, u=tau/tL;
+  const mgR=(m-(tank0-gas))/m, S=1+0.06*smooth(u), N=mgR+S, f=mu*N, R=vx>0?rollRes(N):0, Tmain=Math.max(0.5,(aL/g)*mgR+dragR(vx)+R-f);
+  return st({x,vx,fan:S,load:N,main:Tmain,mdot:mdotL,G:Math.hypot(aL,g)/g,camT:camA1(x),
+  dust:tau<0.45?1:0,shk:tau<DT*1.5?0.07:0,slowT:0.4,forces:forces({x,y:hc},{N,S,f,T:Tmain,D:dragR(vx),R}),cap:'吸地風扇＋主推進器：全力彈射'});});
 const tB0=T;
-seg(tBr,(tau)=>{const x=dL+v60*tau-0.5*aBr*tau*tau, vx=v60-aBr*tau;const k=smooth((T-tB0)/(tBr+tCr));
-  return st({x,vx,fan:1,load:2,G:Math.hypot(aBr,g)/g,camT:blendCam(camA1(x),camF(x,hc,vx),k),
-  forces:forces({x,y:hc},{N:2,S:1,f:-aBr/g}),cap:'推進器關閉，煞車減速到約 65 km/h，準備進入彎曲坡道'});});
-seg(tCr,(tau)=>{const x=dL+dBr+vIn*tau;const k=smooth((T-tB0)/(tBr+tCr));
-  return st({x,vx:vIn,fan:1,load:2,camT:blendCam(camA1(x),camF(x,hc,vIn),k),forces:forces({x,y:hc},{N:2,S:1}),cap:'以 18 m/s（約 65 km/h）駛向坡道'});});
+seg(tBr,(tau)=>{const x=dL+v60*tau-0.5*aBr*tau*tau, vx=v60-aBr*tau, u=tau/tBr;const k=smooth((T-tB0)/(tBr+tCr));
+  const mgR=(m-(tank0-gas))/m, S=lerp(1.08,0.35,smooth(u)), N=mgR+S;
+  // 等減速度 aBr：煞車摩擦力 + 空氣阻力 + 滾動阻力 = m·aBr
+  const R=rollRes(N), fBrk=-(aBr/g*mgR-dragR(vx)-R);
+  return st({x,vx,fan:S,load:N,G:Math.hypot(aBr,g)/g,camT:blendCam(camA1(x),camF(x,hc,vx),k),
+  forces:forces({x,y:hc},{N,S,f:fBrk,D:dragR(vx),R}),cap:'推進器關閉，煞車減速到約 65 km/h，準備進入彎曲坡道'});});
+seg(tCr,(tau)=>{const x=dL+dBr+vIn*tau, u=tau/tCr;const k=smooth((T-tB0)/(tBr+tCr));
+  // 等速 → 合力為零：驅動摩擦力 f 剛好抵消空氣阻力 D 與滾動阻力 R
+  const mgR=(m-(tank0-gas))/m, S=lerp(0.35,0.38,smooth(u)), N=mgR+S, R=rollRes(N), fCr=dragR(vIn)+R;
+  return st({x,vx:vIn,fan:S,load:N,camT:blendCam(camA1(x),camF(x,hc,vIn),k),forces:forces({x,y:hc},{N,S,f:fCr,D:dragR(vIn),R}),cap:'以 18 m/s（約 65 km/h）定速駛向坡道'});});
 
-// ---- 第二段：彎曲坡道 ----
+// ---- 第二段：彎曲坡道（動態 f、S、N 與坡頂釋放） ----
 {
-  let th=0; const mk=[[6,'s5'],[90,'s6'],[149,'s7']]; let mi=0;
+  let th=0; const mk=[[6,'s5'],[90,'s6'],[144,'s7']]; let mi=0;
   while(th<thE){
     if(mi<mk.length&&th>=mk[mi][0]*Math.PI/180){stops.push({id:mk[mi][1],t:T});mi++;}
     const v=vTh(th), ct=Math.cos(th), sn=Math.sin(th);
     const x=xL+(r-hc)*sn, y=r-(r-hc)*ct;
-    const at=aD-g*sn, an=v*v/r;
+    const mgR=(m-(tank0-gas))/m, f=fRamp(th), S=sRamp(th,v,mgR);
+    const at=f*g-g*sn, an=v*v/r;
     const ax=at*ct-an*sn, ay=at*sn+an*ct;
-    const N=(an+S1*g+g*ct)/g, vc=v*(r-hc)/r;
-    pushS(st({x,y,phi:th,vx:vc*ct,vy:vc*sn,fan:1,load:N,onLoop:true,G:Math.hypot(ax,ay+g)/g,camT:camF(x,y,vc*ct),slowT:th>2.53?0.2:(th>2.3?0.4:0.7),
-      forces:forces({x,y,phi:th},{N,S:1,f:aD/g}),cap:th<1.2?'進入彎曲坡道：圓周運動開始':(th<2.2?'貼著垂直牆面往上爬':'接近倒立：吸地風扇把車貼在牆上')}));
+    // f 為輪胎切向淨力（決定 v(θ)）；驅動摩擦力需再多抵消滾動阻力 R
+    const N=Math.max(0,an/g+S+mgR*ct), vc=v*(r-hc)/r, R=rollRes(N), fDrv=f+R;
+    pushS(st({x,y,phi:th,vx:vc*ct,vy:vc*sn,fan:S,load:N,onLoop:true,G:Math.hypot(ax,ay+g)/g,camT:camF(x,y,vc*ct),slowT:th>2.5?0.2:(th>2.3?0.4:0.7),
+      forces:forces({x,y,phi:th},{N,S,f:fDrv,R}),cap:th<1.2?'進入彎曲坡道：正向力 N 隨向心力跳升':(th<2.1?'爬上垂直牆面：摩擦力 f 隨 sinθ 增至最大':(th<thRel?'接近倒立：吸力 S 升至最高撐住車身':'坡頂釋放段：吸力 S 漸減、N 降為 0 脫離坡面'))}));
     th+=v/r*DT;
   }
 }
@@ -131,20 +165,24 @@ seg(tb,(tau)=>{
     ...orbitAt(tau),forces:forces({x,y,phi,rho},{}),cap});
 });
 stop('s10',0.02);
-seg(tBurn,(tau)=>{const x=Ex+Vx*(tb+tau), y=yb+vyb*tau+0.5*aB*tau*tau;
-  return st({x,y,phi:Math.PI,rho:Math.PI,vx:Vx,vy:vyb+aB*tau,G:GB,down:GB,mdot:mdotB,contact:false,gap:hc+0.06,camT:camF(x,y,Vx),...orbitAt(tb+tau),
-  forces:forces({x,y,phi:Math.PI,rho:Math.PI},{Td:GB}),cap:'離地 6.5 m：向下噴嘴全力煞住下墜'});});
+seg(tBurn,(tau)=>{const x=Ex+Vx*(tb+tau), y=yb+vyb*tau+0.5*aB*tau*tau, u=tau/tBurn;
+  const Td=GB*(1.05-0.1*u);
+  return st({x,y,phi:Math.PI,rho:Math.PI,vx:Vx,vy:vyb+aB*tau,G:Td,down:Td,mdot:mdotB,contact:false,gap:hc+0.06,camT:camF(x,y,Vx),...orbitAt(tb+tau),
+  forces:forces({x,y,phi:Math.PI,rho:Math.PI},{Td}),cap:'離地 6.5 m：向下噴嘴全力煞住下墜'});});
 const xTD=Ex+Vx*(tb+tBurn);
 seg(Tsus,(tau)=>{const q=Math.PI*tau/(2*Tsus);const x=xTD+Vx*tau, y=hc-dip*Math.sin(q);const a=vLand*(Math.PI/(2*Tsus))*Math.sin(q);
-  return st({x,y,phi:Math.PI,rho:Math.PI,vx:Vx,vy:-vLand*Math.cos(q),G:1+a/g,load:1+a/g,gap:y,dust:tau<0.08?2:0,shk:tau<DT*1.5?0.1:0,camT:camF(x,y,Vx),...orbitAt(tdX+tau),
-  forces:forces({x,y,phi:Math.PI,rho:Math.PI},{N:1+a/g}),cap:'四輪著地：懸吊壓縮吸收衝擊'});});
+  // 水平等速 → 驅動摩擦力 f 只抵消滾動阻力 R 與空氣阻力 D；鉛直方向 N 大於 mg（懸吊減速）
+  const mgR=(m-(tank0-gas))/m, N=mgR+a/g, R=rollRes(N), D=dragR(Vx);
+  return st({x,y,phi:Math.PI,rho:Math.PI,vx:Vx,vy:-vLand*Math.cos(q),G:N,load:N,gap:y,dust:tau<0.08?2:0,shk:tau<DT*1.5?0.1:0,camT:camF(x,y,Vx),...orbitAt(tdX+tau),
+  forces:forces({x,y,phi:Math.PI,rho:Math.PI},{N,f:R+D,R,D}),cap:'四輪著地：懸吊壓縮吸收衝擊'});});
 const xTD2=xTD+Vx*Tsus, tBrk2=-Vx/5;
 stop('s11',0.9);
 seg(tBrk2,(tau)=>{const x=xTD2+Vx*tau+2.5*tau*tau, y=hc-dip*(1-smooth(tau/0.4));const fan=smooth(tau/0.4), vx=Vx+5*tau;
-  return st({x,y,phi:Math.PI,rho:Math.PI,vx,fan,load:1+fan,gap:y,G:Math.hypot(5,g)/g,camT:camF(x,y,vx),...orbitAt(tdX+Tsus+tau),
-  forces:forces({x,y,phi:Math.PI,rho:Math.PI},{N:1+fan,S:fan,f:-5/g}),cap:'吸地風扇重新介入：加大正向力來煞車'});});
+  const mgR=(m-(tank0-gas))/m, N=mgR+fan, R=rollRes(N), fBrk=-(5/g*mgR-dragR(vx)-R);
+  return st({x,y,phi:Math.PI,rho:Math.PI,vx,fan,load:N,gap:y,G:Math.hypot(5,g)/g,camT:camF(x,y,vx),...orbitAt(tdX+Tsus+tau),
+  forces:forces({x,y,phi:Math.PI,rho:Math.PI},{N,S:fan,f:fBrk,D:dragR(vx),R}),cap:'吸地風扇重新介入：加大正向力來煞車'});});
 const xEnd2=xTD2+Vx*tBrk2+2.5*tBrk2*tBrk2;
-seg(1.0,()=>st({x:xEnd2,phi:Math.PI,rho:Math.PI,fan:1,load:2,camT:camF(xEnd2,hc,0),forces:forces({x:xEnd2,y:hc,phi:Math.PI,rho:Math.PI},{N:2,S:1}),cap:'第一、二段完成'}));
+seg(1.0,()=>st({x:xEnd2,phi:Math.PI,rho:Math.PI,fan:1,load:2,camT:camF(xEnd2,hc,0),forces:forces({x:xEnd2,y:hc,phi:Math.PI,rho:Math.PI},{N:((m-(tank0-gas))/m)+1,S:1}),cap:'第一、二段完成'}));
 const gasAfter2=gas;
 seg(0.7,(tau,u)=>st({x:xEnd2,phi:Math.PI,rho:Math.PI,fan:1,load:2,camT:camF(xEnd2,hc,0),fade:u,title:'第三段：跳越車列',forces:[]}));
 seg(0.6,()=>st({scene:'B',x:-36,fan:1,load:2,camT:camB(-36),fade:1,title:'第三段：跳越車列',forces:[]}));
@@ -152,14 +190,15 @@ seg(0.6,()=>st({scene:'B',x:-36,fan:1,load:2,camT:camB(-36),fade:1,title:'第三
 // ---- 第三段：跳越車列 ----
 const camBNear=(x,y)=>[x+1.2,Math.max(CY(14.5),y+0.15),14.5];
 const camBLand=(x,y,w=15)=>[x+1.2,Math.max(CY(w),y+0.1),w];
-seg(3.0,(tau)=>{const x=-36+vx3*tau;const fan=tau<2.58?1:Math.max(0,1-(tau-2.58)/0.3);
-  const kz=smooth((tau-1.25)/0.9);
-  return st({scene:'B',x,vx:vx3,fan,load:1+fan,camT:blendCam(camB(x),camBNear(x,hc),kz),fade:tau<0.7?1-tau/0.7:0,title:'第三段：跳越車列',
-  forces:forces({x,y:hc},{N:1+fan,S:fan}),cap:tau<2.2?'以 12 m/s（約 43 km/h）接近車列':'鏡頭拉近：起跳前先關閉吸地風扇'});});
+seg(3.0,(tau)=>{const x=-36+vx3*tau;const fan=tau<2.4?1:Math.max(0,1-smooth((tau-2.4)/0.48));
+  const kz=smooth((tau-1.25)/0.9), mgR=(m-(tank0-gas))/m, N=mgR+fan, R=rollRes(N), fApp=dragR(vx3)+R;
+  return st({scene:'B',x,vx:vx3,fan,load:N,camT:blendCam(camB(x),camBNear(x,hc),kz),fade:tau<0.7?1-tau/0.7:0,title:'第三段：跳越車列',
+  forces:forces({x,y:hc},{N,S:fan,f:fApp,D:dragR(vx3),R}),cap:tau<2.2?'以 12 m/s（約 43 km/h）接近車列':'鏡頭拉近：起跳前先漸減關閉吸地風扇'});});
 stop('s12',0.03);
-seg(t1,(tau)=>{const x=vx3*tau, y=hc+0.5*g*tau*tau;
-  return st({scene:'B',x,y,vx:vx3,vy:g*tau,G:2,down:2,mdot:mdot1,contact:false,gap:hc+0.06,camT:camBNear(x,y),slowT:0.55,
-  forces:forces({x,y},{Td:2}),cap:'向下噴嘴推力 2mg：向上加速起跳'});});
+seg(t1,(tau)=>{const x=vx3*tau, y=hc+0.5*g*tau*tau, u=tau/t1;
+  const Td=2*(0.97+0.06*Math.sin(Math.PI*u));
+  return st({scene:'B',x,y,vx:vx3,vy:g*tau,G:Td,down:Td,mdot:mdot1,contact:false,gap:hc+0.06,camT:camBNear(x,y),slowT:0.55,
+  forces:forces({x,y},{Td}),cap:'向下噴嘴推力 2mg：向上加速起跳'});});
 stop('s13',vy1/g);
 seg(tc,(tau)=>{const x=vx3*(t1+tau), y=hc+h1+vy1*tau-0.5*g*tau*tau;
   const tApex=vy1/g;
@@ -169,20 +208,22 @@ seg(tc,(tau)=>{const x=vx3*(t1+tau), y=hc+h1+vy1*tau-0.5*g*tau*tau;
   const camT=blendCam(cMid,camBLand(x,y,15),kIn);
   const cap=tau<tApex?'推進器關閉：靠慣性繼續上升（鉛直上拋）':(tau<tc-0.4?'最高點拉遠：越過車列，開始下墜':'準備煞降：噴射前鏡頭拉近');
   return st({scene:'B',x,y,vx:vx3,vy:vy1-g*tau,G:0,contact:false,gap:hc+0.06,camT,slowT:0.55,forces:forces({x,y},{}),cap});});
-seg(tB2,(tau)=>{const x=vx3*(t1+tc+tau), y=hc+2+vy2*tau+0.5*a2*tau*tau;
-  return st({scene:'B',x,y,vx:vx3,vy:vy2+a2*tau,G:(g+a2)/g,down:(g+a2)/g,mdot:mdot2,contact:false,gap:hc+0.06,camT:camBLand(x,y,15),slowT:0.5,
-  forces:forces({x,y},{Td:(g+a2)/g}),cap:'最後 2 m：向下噴嘴噴射煞降'});});
+seg(tB2,(tau)=>{const x=vx3*(t1+tc+tau), y=hc+2+vy2*tau+0.5*a2*tau*tau, u=tau/tB2;
+  const Td=((g+a2)/g)*(1.04-0.08*u);
+  return st({scene:'B',x,y,vx:vx3,vy:vy2+a2*tau,G:Td,down:Td,mdot:mdot2,contact:false,gap:hc+0.06,camT:camBLand(x,y,15),slowT:0.5,
+  forces:forces({x,y},{Td}),cap:'最後 2 m：向下噴嘴噴射煞降'});});
 const xT3=vx3*(t1+tc+tB2);
 stop('s14',0.15);
 seg(Tsus,(tau)=>{const q=Math.PI*tau/(2*Tsus);const x=xT3+vx3*tau, y=hc-dip*Math.sin(q);const a=vLand*(Math.PI/(2*Tsus))*Math.sin(q);
-  return st({scene:'B',x,y,vx:vx3,vy:-vLand*Math.cos(q),G:1+a/g,load:1+a/g,gap:y,dust:tau<0.08?2:0,shk:tau<DT*1.5?0.08:0,camT:camBLand(x,hc,15.5),slowT:0.55,
-  forces:forces({x,y},{N:1+a/g}),cap:'落地！'});});
+  const mgR=(m-(tank0-gas))/m, N=mgR+a/g, R=rollRes(N), D=dragR(vx3);
+  return st({scene:'B',x,y,vx:vx3,vy:-vLand*Math.cos(q),G:N,load:N,gap:y,dust:tau<0.08?2:0,shk:tau<DT*1.5?0.08:0,camT:camBLand(x,hc,15.5),slowT:0.55,
+  forces:forces({x,y},{N,f:R+D,R,D}),cap:'落地！'});});
 const xT4=xT3+vx3*Tsus;
 seg(2.4,(tau)=>{const x=xT4+vx3*tau-2.5*tau*tau, y=hc-dip*(1-smooth(tau/0.4));const fan=smooth(tau/0.4), vx=vx3-5*tau;
-  const w=lerp(15.5,20,smooth(tau/1.6));
-  return st({scene:'B',x,y,vx,fan,load:1+fan,gap:y,G:Math.hypot(5,g)/g,camT:[x+1.2*(1-smooth(tau/2.2)),CY(w),w],forces:forces({x,y},{N:1+fan,S:fan,f:-5/g}),cap:'吸地風扇＋煞車：鏡頭跟隨直到停車'});});
+  const w=lerp(15.5,20,smooth(tau/1.6)), mgR=(m-(tank0-gas))/m, N=mgR+fan, R=rollRes(N), fBrk=-(5/g*mgR-dragR(vx)-R);
+  return st({scene:'B',x,y,vx,fan,load:N,gap:y,G:Math.hypot(5,g)/g,camT:[x+1.2*(1-smooth(tau/2.2)),CY(w),w],forces:forces({x,y},{N,S:fan,f:fBrk,D:dragR(vx),R}),cap:'吸地風扇＋煞車：鏡頭跟隨直到停車'});});
 const xFin=xT4+vx3*2.4-2.5*2.4*2.4;
-seg(1.2,()=>st({scene:'B',x:xFin,fan:1,load:2,camT:[xFin,CY(20),20],forces:forces({x:xFin,y:hc},{N:2,S:1}),cap:'展示結束'}));
+seg(1.2,()=>{const mgR=(m-(tank0-gas))/m;return st({scene:'B',x:xFin,fan:1,load:mgR+1,camT:[xFin,CY(20),20],forces:forces({x:xFin,y:hc},{N:mgR+1,S:1}),cap:'展示結束'});});
 const gasEnd=gas, Tend=T-DT;
 stops.forEach((s,i)=>s.i=i);
 

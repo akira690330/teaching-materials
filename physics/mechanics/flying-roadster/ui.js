@@ -18,6 +18,9 @@ function updateHUD(s){
   if(!playing&&curStop>=0&&Math.abs(stops[curStop].t-simT)<1e-6){cap.textContent=`⏸ 關鍵點 ${curStop+1}：${CARDS[stops[curStop].id].title}`;cap.classList.add('stop');}
   else{cap.textContent=s.cap;cap.classList.remove('stop');}
   $('fill').style.width=(100*simT/Tend)+'%';
+  if(s.fMap){
+    for(const k of ['mg','N','S','f','T','D','R']){const el=$('l_'+k);if(el)el.textContent=n1(s.fMap[k]*mg/1e3)+' kN';}
+  }
 }
 function chipsFor(s){
   const C=[['fan','吸地風扇',s.fan>0.05,`S ≈ ${n1(s.fan)}mg`],['main','主推進器（後）',s.main>0,`T ≈ ${n1(s.main)}mg`],
@@ -45,7 +48,7 @@ function showIntro(){
   <p><span class="k" style="background:var(--T)"></span><b>冷氣體推進器</b>：噴出高壓空氣，用反作用力直接推車。</p>
   <p><span class="k" style="background:#e0a400"></span><b>主動式姿態控制</b>：小噴嘴產生力矩，在空中翻正、微調車身。</p>
   <p>動畫分成三段：<b>彈射起步 → 彎曲坡道與空中翻轉 → 跳越車列</b>。全程為 3D 夜間測試場展示，關鍵時刻會自動放慢，車子騰空時會有子彈時間與拉近／拉遠的動態運鏡；勾選下方「關鍵點自動停」時，每到關鍵點會停下並在右側說明當下的力學原理。畫面上的箭頭是即時受力圖。</p>
-  <p class="note">鍵盤：空白鍵＝播放／暫停，← → ＝上一個／下一個關鍵點。數字中有一部分是教學假設（見頁尾）。</p></div>
+  <p class="note">鍵盤：空白鍵＝播放／暫停，← → ＝上一個／下一個關鍵點，M＝音效開關。數字中有一部分是教學假設（見頁尾）。</p></div>
   <div class="c-foot"><span></span><button class="primary" id="cGo">開始播放 ▶</button></div>`;
   $('cGo').onclick=play; marks();
 }
@@ -70,28 +73,38 @@ function marks(){
   [...box.children].forEach((b,i)=>{b.classList.toggle('done',stops[i].t<=simT+1e-6);b.classList.toggle('cur',i===curStop);});
 }
 function btn(){const b=$('bPlay');b.textContent=playing?'❚❚ 暫停':(ended||simT>=Tend?'↺ 重播':(simT===0?'▶ 開始':'▶ 繼續'));}
-function play(){if(simT>=Tend){replay();return;}playing=true;ended=false;resumeAt=performance.now()/1000;btn();}
+function play(){if(simT>=Tend){replay();return;}audioInit();playing=true;ended=false;resumeAt=performance.now()/1000;btn();}
 function pause(){playing=false;btn();}
 function prewarm(t){parts=[];acc={};for(let k=Math.max(0,t-0.5);k<t;k+=DT*2)stepParticles(DT*2,at(k));}
 function jump(i){simT=stops[i].t;playing=false;ended=false;prewarm(simT);showCard(i);btn();draw();}
 function next(){const i=stops.findIndex(s=>s.t>simT+1e-6);if(i>=0)jump(i);}
 function prev(){let j=-1;stops.forEach((s,i)=>{if(s.t<simT-1e-6)j=i;});if(j>=0)jump(j);else{simT=0;parts=[];pause();showIntro();draw();}}
-function replay(){simT=0;parts=[];acc={};ended=false;curStop=-1;marks();playing=true;resumeAt=performance.now()/1000;btn();}
+function replay(){audioInit();simT=0;parts=[];acc={};ended=false;curStop=-1;marks();playing=true;resumeAt=performance.now()/1000;btn();}
 $('bPlay').onclick=()=>playing?pause():play();
 $('bNext').onclick=next;$('bPrev').onclick=prev;$('bReplay').onclick=replay;
 $('sel').onchange=e=>speed=+e.target.value;
 $('cForce').onchange=e=>{showForces=e.target.checked;draw();};
 $('cAuto').onchange=e=>autoStop=e.target.checked;
+$('bSnd').onclick=toggleMute; auButton();
+if($('bFs')){$('bFs').onclick=()=>{
+  const on=document.body.classList.toggle('fs-mode');
+  $('bFs').textContent=on?'✕ 退出全螢幕':'⛶ 全螢幕';
+  if(on){document.documentElement.requestFullscreen?.().catch(()=>{});screen.orientation?.lock?.('landscape').catch(()=>{});}
+  else if(document.fullscreenElement){document.exitFullscreen?.().catch(()=>{});}
+  setTimeout(resize,60);
+};}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&document.body.classList.contains('fs-mode')){document.body.classList.remove('fs-mode');if($('bFs'))$('bFs').textContent='⛶ 全螢幕';setTimeout(resize,60);}});
 $('timeline').onclick=e=>{const b=e.currentTarget.getBoundingClientRect();simT=Math.max(0,Math.min(Tend,(e.clientX-b.left)/b.width*Tend));
   playing=false;prewarm(simT);curStop=-1;marks();btn();draw();};
 document.addEventListener('keydown',e=>{if(e.target.tagName==='SELECT'||e.target.tagName==='INPUT')return;
-  if(e.code==='Space'){e.preventDefault();playing?pause():play();}else if(e.key==='ArrowRight'){next();}else if(e.key==='ArrowLeft'){prev();}});
+  if(e.code==='Space'){e.preventDefault();playing?pause():play();}else if(e.key==='ArrowRight'){next();}else if(e.key==='ArrowLeft'){prev();}else if(e.key==='m'||e.key==='M'){toggleMute();}});
 
 function tick(ts){
   if(last==null)last=ts;const rdt=Math.min(0.05,(ts-last)/1000);last=ts;
+  let rate=0;
   if(playing){
     const s=at(simT), nowS=ts/1000;
-    let rate=speed*s.slow;
+    rate=speed*s.slow;
     rate*=0.15+0.85*smooth((nowS-resumeAt)/0.6);            // 繼續時漸快
     let hit=null;
     if(autoStop){for(const q of stops){if(q.t>simT+1e-9){hit=q;break;}}}
@@ -109,7 +122,7 @@ function tick(ts){
     else marks();
     btn();
   }
-  draw(); requestAnimationFrame(tick);
+  draw(); audioUpdate(at(simT),rate,playing); requestAnimationFrame(tick);
 }
 try{R3=init3D();}catch(e){console.warn('3D 初始化失敗，改用 2D',e);R3=null;}
 new ResizeObserver(resize).observe($('wrap'));
