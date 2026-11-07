@@ -12,8 +12,10 @@ function resize(){const b=cv.getBoundingClientRect();if(!b.width)return;DPR=Math
     const u=H*PR/(2*Math.tan(14*Math.PI/180));R3.gasP.material.uniforms.uS.value=u;R3.dustP.material.uniforms.uS.value=u;R3.car.suck.material.uniforms.uS.value=u;}
   draw();}
 const sx=x=>W/2+(x-cam.cx)*sc, sy=y=>H/2-(y-cam.cy)*sc;
-const COL={mg:'#3a6db5',N:'#23935a',S:'#8b4fd0',f:'#de7f12',T:'#0e97ad'};
-const LAB={mg:'mg',N:'N',S:'S 吸力',f:'f 摩擦',T:'T 推力'};
+const COL={mg:'#3a6db5',N:'#23935a',S:'#8b4fd0',f:'#de7f12',T:'#0e97ad',D:'#6b7280',R:'#8a5a2b'};
+const LAB={mg:'mg',N:'N',S:'S 吸力',f:'f 摩擦',T:'T 推力',D:'D 空氣阻力',R:'R 滾動阻力'};
+// 力的標籤：小於 0.01 mg 改用牛頓，避免顯示成 0.00mg
+const forceLabel=f=>`${LAB[f.k]} ${f.mag<0.01?n0(f.mag*mg)+' N':n2(f.mag)+'mg'}`;
 const CLOUDS=Array.from({length:14},(_,i)=>({x:i*23+((i*37)%11),y:16+((i*53)%26),s:3+((i*29)%5)}));
 
 function drawSky(s){
@@ -269,7 +271,7 @@ function drawForces(s){
     if(f.mode==='from'){x1=x0+dx*len;y1=y0+dy*len;}else{x1=x0;y1=y0;x0=x1-dx*len;y0=y1-dy*len;}
     ctx.save();ctx.shadowColor='rgba(255,255,255,.9)';ctx.shadowBlur=4;drawArrow(x0,y0,x1,y1,COL[f.k],lw);ctx.restore();
     const lx=(f.mode==='from'?x1:x0)+dx*10*U, ly=(f.mode==='from'?y1:y0)+dy*10*U+4;
-    const txt=f.k==='mg'?'mg':`${LAB[f.k]} ${n1(f.mag)}mg`;
+    const txt=forceLabel(f);
     ctx.textAlign=dx>0.3?'left':dx<-0.3?'right':'center';
     ctx.lineWidth=3.5;ctx.strokeStyle='rgba(255,255,255,.92)';ctx.strokeText(txt,lx,ly);ctx.fillStyle=COL[f.k];ctx.fillText(txt,lx,ly);
   }

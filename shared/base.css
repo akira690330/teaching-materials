@@ -13,6 +13,7 @@ h1{font-size:clamp(20px,2.5vw,30px);margin:2px 0 2px;line-height:1.3}
 .layout{max-width:1380px;margin:0 auto;padding:12px 20px 20px;display:grid;
   grid-template-columns:minmax(0,1fr) 410px;gap:18px;align-items:start}
 @media (max-width:1020px){.layout{grid-template-columns:1fr}}
+@media (max-width:640px){header.top{padding:12px 10px 4px}.layout{padding:8px 8px 16px;gap:12px}}
 .timeline{position:relative;height:36px;margin:30px 4px 0;cursor:pointer}
 .track{position:absolute;left:0;right:0;top:16px;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
 .fill{height:100%;background:var(--red);width:0}

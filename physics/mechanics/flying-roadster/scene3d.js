@@ -315,7 +315,7 @@ function drawForces3D(s){
     const dx=pb[0]-pa[0],dy=pb[1]-pa[1],L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
     const tip=f.mode==='from'?pb:pa, sg=f.mode==='from'?1:-1;
     const lx=tip[0]+sg*ux*10*U, ly=tip[1]+sg*uy*10*U+4;
-    const txt=f.k==='mg'?'mg':`${LAB[f.k]} ${n1(f.mag)}mg`;
+    const txt=forceLabel(f);
     ctx.textAlign=ux*sg>0.3?'left':ux*sg<-0.3?'right':'center';
     ctx.lineWidth=3.5;ctx.strokeStyle='rgba(8,10,14,.85)';ctx.strokeText(txt,lx,ly);ctx.fillStyle=COL3[f.k];ctx.fillText(txt,lx,ly);
   }
@@ -325,4 +325,4 @@ function drawForces3D(s){
     ctx.textAlign='center';ctx.lineWidth=3.5;ctx.strokeStyle='rgba(8,10,14,.85)';const t=s.couple>0?'力偶：開始滾轉':'反向力偶：停止滾轉';
     ctx.strokeText(t,c[0],c[1]-R-8);ctx.fillStyle='#ffd766';ctx.fillText(t,c[0],c[1]-R-8);}
 }
-const COL3={mg:'#7fb0ff',N:'#4fd88a',S:'#c49bff',f:'#ffaa44',T:'#4fe3f5'};
+const COL3={mg:'#7fb0ff',N:'#4fd88a',S:'#c49bff',f:'#ffaa44',T:'#4fe3f5',D:'#c3c8d0',R:'#d9a066'};
